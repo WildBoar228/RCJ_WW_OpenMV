@@ -56,7 +56,7 @@ sys.stdout.flush()
 
 
 def threshold_filter(thr, pixels):
-    labpix = rgb2lab(pixels / 255)
+    labpix = rgb2lab(pixels / 255).astype(np.int8)
     ind = np.all(labpix >= thr[::2], axis=2) * np.all(labpix <= thr[1::2], axis=2)
     return ind * 255
 
@@ -107,6 +107,7 @@ def threshold_from_area(rect, pixels):
                     np.min(labpix[rect.left : rect.right + 1, rect.top : rect.bottom + 1, 2]),
                     np.max(labpix[rect.left : rect.right + 1, rect.top : rect.bottom + 1, 2]),
                     ]).astype(np.int8)
+    print(list(map(int, thr)))
     return thr
 
 
@@ -178,9 +179,6 @@ def set_pause():
 pygame.init()
 screen_w = 1280
 screen_h = 600
-# try:
-    #screen = pygame.display.set_mode((screen_w, screen_h), flags=pygame.RESIZABLE)
-# except TypeError:
 screen = pygame.display.set_mode((screen_w, screen_h))
 
 pygame.display.set_caption("Frame Buffer")
@@ -262,10 +260,12 @@ widgets = {'img_src': ImageNumpy(screen, pygame.Rect(20, 60, 320, 240), source=p
                                     borders=(20, 400), values=(0, 100),
                                     radius=8, bg_width=3,
                                     color=(0, 0, 0)),
+            'bg_slider_L_low': Widget(screen, pygame.Rect(20, 360, 380, 9), block_click=False),
             'slider_L_high': HorizSlider(screen, pygame.Rect(20, 370, 10, 10),
                                     borders=(20, 400), values=(0, 100),
                                     radius=8, bg_width=3,
                                     color=(150, 150, 150)),
+            'bg_slider_L_high': Widget(screen, pygame.Rect(20, 370, 380, 9), block_click=False),
             'label_L': Label(screen, pygame.Rect(420, 370, 0, 0),
                             'L  [0, 100]', color=(0, 0, 0), stratch=False,
                             font=pygame.font.Font(None, 30)),
@@ -274,10 +274,12 @@ widgets = {'img_src': ImageNumpy(screen, pygame.Rect(20, 60, 320, 240), source=p
                                     borders=(20, 400), values=(-127, 127),
                                     radius=8, bg_width=3,
                                     color=(100, 150, 100)),
+            'bg_slider_A_low': Widget(screen, pygame.Rect(20, 400, 380, 9), block_click=False),
             'slider_A_high': HorizSlider(screen, pygame.Rect(20, 410, 10, 10),
                                     borders=(20, 400), values=(-127, 127),
                                     radius=8, bg_width=3,
                                     color=(150, 100, 100)),
+            'bg_slider_A_high': Widget(screen, pygame.Rect(20, 410, 380, 9), block_click=False),
             'label_A': Label(screen, pygame.Rect(420, 400, 0, 0),
                             'A  [-127, 127]', color=(0, 0, 0), stratch=False,
                             font=pygame.font.Font(None, 30)),
@@ -286,10 +288,12 @@ widgets = {'img_src': ImageNumpy(screen, pygame.Rect(20, 60, 320, 240), source=p
                                     borders=(20, 400), values=(-127, 127),
                                     radius=8, bg_width=3,
                                     color=(100, 100, 150)),
+            'bg_slider_B_low': Widget(screen, pygame.Rect(20, 450, 380, 9), block_click=False),
             'slider_B_high': HorizSlider(screen, pygame.Rect(20, 460, 10, 10),
                                     borders=(20, 400), values=(-127, 127),
                                     radius=8, bg_width=3,
                                     color=(150, 150, 80)),
+            'bg_slider_B_high': Widget(screen, pygame.Rect(20, 460, 380, 9), block_click=False),
             'label_B': Label(screen, pygame.Rect(420, 450, 0, 0),
                             'B  [-127, 127]', color=(0, 0, 0), stratch=False,
                             font=pygame.font.Font(None, 30)),
@@ -349,9 +353,12 @@ widgets = {'img_src': ImageNumpy(screen, pygame.Rect(20, 60, 320, 240), source=p
                                             stratch=True),
                                 func=set_pause,
                                 colors={'normal': (0, 0, 0),
-                                        'pressed': (100, 100, 100)}),
+                                        'pressed': (100, 100, 100)})
 }
 wnames = list(widgets.keys())
+bg_names = ['bg_slider_L_low', 'bg_slider_L_high',
+            'bg_slider_A_low', 'bg_slider_A_high',
+            'bg_slider_B_low', 'bg_slider_B_high',]
 
 keys = {}
 press_pos = (-1, -1)
@@ -401,8 +408,10 @@ def jpg_frame_buffer_cb(data):
 
     try:
         if not is_pause:
-            widgets['img_src'].pixels = np.rot90(np.array(image), k=3)
-    except Exception: return
+            widgets['img_src'].pixels = np.rot90(np.array(image), k=1)
+    except Exception as exc:
+        print(exc)
+        return
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -411,11 +420,6 @@ def jpg_frame_buffer_cb(data):
             
         if event.type == pygame.KEYDOWN:
             keys[event.key] = 1
-            # if event.key == pygame.K_a:
-            #     edit_index -= 1
-                    
-            # if event.key == pygame.K_d:
-            #     edit_index += 1
             
             if event.key == pygame.K_c and (keys.get(pygame.K_LCTRL) or keys.get(pygame.K_RCTRL)):
                 thr_buffer = thresholds[thr_index].copy()
@@ -424,14 +428,34 @@ def jpg_frame_buffer_cb(data):
                 if thr_buffer[0] != -1:
                     thresholds[thr_index] = thr_buffer.copy()
                     set_thr_to_sliders()
+            
+            if keys.get(pygame.K_LEFT):
+                for i in range(6):
+                    if widgets[bg_names[i]].mouse_inside:
+                        if (keys.get(pygame.K_LALT) or keys.get(pygame.K_RALT)):
+                            thresholds[thr_index][i] -= 5
+                        else:
+                            thresholds[thr_index][i] -= 1
+                        set_thr_to_sliders()
+            
+            if keys.get(pygame.K_RIGHT):
+                for i in range(6):
+                    if widgets[bg_names[i]].mouse_inside:
+                        if (keys.get(pygame.K_LALT) or keys.get(pygame.K_RALT)):
+                            thresholds[thr_index][i] += 5
+                        else:
+                            thresholds[thr_index][i] += 1
+                        set_thr_to_sliders()
         
         if event.type == pygame.KEYUP:
             keys[event.key] = 0
         
         if event.type == pygame.MOUSEBUTTONDOWN:
+            blocked = False
             for w in wnames[::-1]:
-                if widgets[w].process_mousedown(event):
-                    break
+                if widgets[w].process_mousedown(event) and not (blocked and widgets[w].block_click):
+                    if widgets[w].block_click:
+                        blocked = True
 
             if thr_index != widgets['itemlist_thr'].chosen:
                 thr_index = widgets['itemlist_thr'].chosen
@@ -453,21 +477,21 @@ def jpg_frame_buffer_cb(data):
                 rect.top //= 2
 
                 if widgets['itemlist_select'].chosen == 0:
-                    thresholds[thr_index] = threshold_from_area(rect, widgets['img_src'].pixels).copy()
+                    thresholds[thr_index] = list(map(int, threshold_from_area(rect, widgets['img_src'].pixels).copy()))
                     with open('color_data.txt', 'w') as file:
                         line = ' '.join(map(str, list(thresholds[thr_index])))
                         file.write(line + ' 1\n')
 
                 if widgets['itemlist_select'].chosen == 1:
                     thresholds[thr_index] = threshold_sum(thresholds[thr_index],
-                                                          threshold_from_area(rect, widgets['img_src'].pixels).copy())
+                                                          list(map(int, threshold_from_area(rect, widgets['img_src'].pixels).copy())))
                     with open('color_data.txt', 'a') as file:
                         line = ' '.join(map(str, list(thresholds[thr_index])))
                         file.write(line + ' 1\n')
                     
                 if widgets['itemlist_select'].chosen == 2:
                     thresholds[thr_index] = threshold_diff(thresholds[thr_index],
-                                                          threshold_from_area(rect, widgets['img_src'].pixels).copy())
+                                                          list(map(int, threshold_from_area(rect, widgets['img_src'].pixels).copy())))
                     with open('color_data.txt', 'a') as file:
                         line = ' '.join(map(str, list(thresholds[thr_index])))
                         file.write(line + ' 0\n')
@@ -489,15 +513,6 @@ def jpg_frame_buffer_cb(data):
         widgets['img_proc'].pixels = filter_B(thresholds[thr_index], widgets['img_src'].pixels)
     
     clock.tick()
-
-    # print(thr_buffer, clock.get_fps())
-    
-    # edit_index = constrain(edit_index, 0, len(thresholds[thr_index]) - 1)
-
-    # if keys.get(pygame.K_w):
-    #     thresholds[thr_index][edit_index] += 1
-    # if keys.get(pygame.K_s):
-    #     thresholds[thr_index][edit_index] -= 1
     
     thresholds[thr_index][0] = constrain(thresholds[thr_index][0], 0, 100)
     thresholds[thr_index][1] = constrain(thresholds[thr_index][1], 0, 100)
@@ -559,6 +574,7 @@ print(base_cam_arguments)
 while(True):
     sys.stdout.flush()
 
+    # jpg_frame_buffer_cb(None)
     # You may change the pixformat and the framesize of the image transferred from the remote device
     # by modifying the below arguments.
     msg = base_cam_arguments + ";"

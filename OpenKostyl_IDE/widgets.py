@@ -13,9 +13,12 @@ def draw_rect_alpha(surface, color, rect):
 
 
 class Widget:
-    def __init__(self, screen, rect=pygame.Rect(0, 0, 0, 0)):
+    def __init__(self, screen, rect=pygame.Rect(0, 0, 0, 0), block_click=True):
         self.screen = screen
         self.rect = rect
+        self.is_pressed = False
+        self.mouse_inside = False
+        self.block_click = block_click
     
     def update(self):
         pass
@@ -33,20 +36,24 @@ class Widget:
 
     def process_mousedown(self, event):
         if not self.in_rect(event.pos):
+            self.is_pressed = False
             return False
         #self.rect.left += 20
+        self.is_pressed = True
         return True
 
     def process_mousemotion(self, event):
+        self.mouse_inside = self.in_rect(event.pos)
         pass
 
     def process_mouseup(self, event):
+        self.is_pressed = False
         pass
 
 
 class ImageNumpy(Widget):
-    def __init__(self, screen, rect, source, select_area=False):
-        super().__init__(screen, rect)
+    def __init__(self, screen, rect, source, select_area=False, block_click=True):
+        super().__init__(screen, rect, block_click)
         self.rect = rect
         self.pixels = source
         self.image = None
@@ -91,8 +98,8 @@ class ImageNumpy(Widget):
 
 
 class Label(Widget):
-    def __init__(self, screen, rect, text, font=None, color=(0, 0, 0), stratch=True):
-        super().__init__(screen, rect)
+    def __init__(self, screen, rect, text, font=None, color=(0, 0, 0), stratch=True, block_click=True):
+        super().__init__(screen, rect, block_click)
         self.text = text
         if font is None:
             font = pygame.font.Font(None, 40)
@@ -114,8 +121,8 @@ class Label(Widget):
 
 
 class Button(Widget):
-    def __init__(self, screen, rect, label=None, func=None, args=(), kwargs={}, colors={'normal': (0, 0, 0)}):
-        super().__init__(screen, rect)
+    def __init__(self, screen, rect, label=None, func=None, args=(), kwargs={}, colors={'normal': (0, 0, 0)}, block_click=True):
+        super().__init__(screen, rect, block_click)
         self.label = label
         self.func = func
         self.args = args
@@ -143,8 +150,8 @@ class Button(Widget):
 
 
 class HorizSlider(Widget):
-    def __init__(self, screen, rect, borders, values=(0, 100), radius=10, color=(100, 100, 100), bg=(50, 50, 50), bg_width=2):
-        super().__init__(screen, rect)
+    def __init__(self, screen, rect, borders, values=(0, 100), radius=10, color=(100, 100, 100), bg=(50, 50, 50), bg_width=2, block_click=True):
+        super().__init__(screen, rect, block_click)
         self.borders = borders
         self.values = values
         self.radius = radius
@@ -188,8 +195,8 @@ class HorizSlider(Widget):
 
 
 class ItemList(Widget):
-    def __init__(self, screen, rect, items, padding_x=0, padding_y=0, offset=(10, 10)):
-        super().__init__(screen, rect)
+    def __init__(self, screen, rect, items, padding_x=0, padding_y=0, offset=(10, 10), block_click=True):
+        super().__init__(screen, rect, block_click)
         self.items = items
         self.padding_x = padding_x
         self.padding_y = padding_y
