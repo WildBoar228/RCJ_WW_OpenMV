@@ -61,16 +61,36 @@ SCREEN_CENTER = (160, 120)
 
 
 def get_object_data(blob, color):
-    circle = blob.enclosing_circle()
-    dist = ((circle[0] - SCREEN_CENTER[0]) ** 2 +
-            (circle[1] - SCREEN_CENTER[1]) ** 2) ** 0.5
-    cang = math.degrees(math.atan2(circle[0] - SCREEN_CENTER[0],
-                                   SCREEN_CENTER[1] - circle[1]))
-    cang = goodAngle(cang)
-    delta = math.degrees(math.atan2(circle[2], dist))
-    lang = goodAngle(cang - delta)
-    rang = goodAngle(cang + delta)
-    width = 2 * delta
+    # circle = blob.enclosing_circle()
+    dist = ((blob.cx() - SCREEN_CENTER[0]) ** 2 +
+            (blob.cy() - SCREEN_CENTER[1]) ** 2) ** 0.5
+
+    # cang = math.degrees(math.atan2(circle[0] - SCREEN_CENTER[0],
+    #                                SCREEN_CENTER[1] - circle[1]))
+    # cang = goodAngle(cang)
+    # delta = math.degrees(math.atan2(circle[2], dist))
+    # lang = goodAngle(cang - delta)
+    # rang = goodAngle(cang + delta)
+    # width = 2 * delta
+
+    cang = math.degrees(math.atan2(blob.cx() - SCREEN_CENTER[0],
+                                   SCREEN_CENTER[1] - blob.cy()))
+    lang = rang = cang
+
+    for p in blob.corners():
+        pang = math.degrees(math.atan2(p[0] - SCREEN_CENTER[0],
+                            SCREEN_CENTER[1] - p[1]))
+        if (goodAngle(pang - cang) < 0):
+            if (abs(goodAngle(pang - cang)) > abs(goodAngle(lang - cang))):
+                lang = pang
+
+        if (goodAngle(pang - cang) > 0):
+            if (abs(goodAngle(pang - cang)) > abs(goodAngle(rang - cang))):
+                rang = pang
+
+    width = goodAngle(rang - lang)
+    cang = (lang + rang) / 2
+
     closAngle = cang
     corners = blob.corners()
     # height = max(((corners[0][0] - corners[2][0]) ** 2 +
@@ -144,8 +164,8 @@ sensor.skip_frames(time = 2000)
 import connect_to_kostyli
 usb_vbus = Pin("USB_VBUS", Pin.IN, Pin.PULL_DOWN)
 if(usb_vbus.value()):
-    #pyb.LED(2).on()
-#    connect_to_kostyli.connect_to_comp()
+    # pyb.LED(2).on()
+    connect_to_kostyli.connect_to_comp()
     pass
 
 #pyb.LED(3).on()
