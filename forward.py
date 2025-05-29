@@ -57,6 +57,9 @@ def goodAngle(ang):
     return ang
 
 
+SCREEN_CENTER = (160, 120)
+
+
 def get_object_data(blob, color):
     circle = blob.enclosing_circle()
     dist = ((circle[0] - SCREEN_CENTER[0]) ** 2 +
@@ -70,10 +73,20 @@ def get_object_data(blob, color):
     width = 2 * delta
     closAngle = cang
     corners = blob.corners()
-    height = max(((corners[0][0] - corners[2][0]) ** 2 +
-                  (corners[0][1] - corners[2][1]) ** 2) ** 0.5,
-                 ((corners[1][0] - corners[3][0]) ** 2 +
-                  (corners[1][1] - corners[3][1]) ** 2) ** 0.5)
+    # height = max(((corners[0][0] - corners[2][0]) ** 2 +
+    #               (corners[0][1] - corners[2][1]) ** 2) ** 0.5,
+    #              ((corners[1][0] - corners[3][0]) ** 2 +
+    #               (corners[1][1] - corners[3][1]) ** 2) ** 0.5)
+
+    height = max(((corners[0][0] - SCREEN_CENTER[0]) ** 2 +
+                  (corners[0][1] - SCREEN_CENTER[1]) ** 2) ** 0.5,
+                 ((corners[1][0] - SCREEN_CENTER[0]) ** 2 +
+                  (corners[1][1] - SCREEN_CENTER[1]) ** 2) ** 0.5,
+                 ((corners[2][0] - SCREEN_CENTER[0]) ** 2 +
+                  (corners[2][1] - SCREEN_CENTER[1]) ** 2) ** 0.5,
+                 ((corners[3][0] - SCREEN_CENTER[0]) ** 2 +
+                  (corners[3][1] - SCREEN_CENTER[1]) ** 2) ** 0.5,)
+
     for i in range(len(corners)):
         dist2, ang2 = dist_to_edge(SCREEN_CENTER,
                                    ((corners[i][0], 2 * SCREEN_CENTER[1] - corners[i][1]),
@@ -116,8 +129,6 @@ except Exception:
 yellow_thr = thresholds[0] #(50, 75, 0, 20, 30, 60)
 blue_thr = thresholds[1] #(40, 55, -10, 15, -20, 5)
 obst_thr = thresholds[2]
-
-SCREEN_CENTER = (160, 120)
 
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
@@ -219,8 +230,8 @@ while True:
     if obst_angle != 360:
         draw_line_from_angle(img, SCREEN_CENTER, obst_angle, (200, 100, 60), obst_dist)
 
-#    print('yellow:', send_yellow[4])
-    print(f'obstacle:  a={obst_angle}, d={obst_dist}')
+    print(send_yellow[5], send_blue[5])
+    #print(f'obstacle:  a={obst_angle}, d={obst_dist}')
 
     send_yellow = list(map(int_for_cpp, send_yellow))
     send_blue = list(map(int_for_cpp, send_blue))
