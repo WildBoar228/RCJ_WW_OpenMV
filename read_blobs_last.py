@@ -21,71 +21,11 @@ def draw_line_from_angle(img, start, angle, color, length=100):
     img.draw_line(*start, int(x), int(y), color=color)
 
 
-def dist_to_edge(point, edge):
-    edge_len = (edge[0][0] - edge[1][0]) ** 2 + (edge[0][1] - edge[1][1]) ** 2
-    p_dist1 = (edge[0][0] - point[0]) ** 2 + (edge[0][1] - point[1]) ** 2
-    p_dist2 = (edge[1][0] - point[0]) ** 2 + (edge[1][1] - point[1]) ** 2
-
-    if p_dist1 > edge_len + p_dist2:
-        angle = math.degrees(math.atan2(edge[1][0] - point[0],
-                                        edge[1][1] - point[1]))
-        return (p_dist2 ** 0.5, angle)
-
-    if p_dist2 > edge_len + p_dist1:
-        angle = math.degrees(math.atan2(edge[0][0] - point[0],
-                                        edge[0][1] - point[1]))
-        return (p_dist1 ** 0.5, angle)
-
-    a = edge[1][1] - edge[0][1]
-    b = edge[0][0] - edge[1][0]
-    c = edge[0][1] * edge[1][0] - edge[0][0] * edge[1][1]
-    if a * a + b * b == 0:
-        return (0, 0)
-    eq = a * point[0] + b * point[1] + c
-    dist = abs(eq) / ((a * a + b * b) ** 0.5)
-    if eq > 0:
-        angle = math.degrees(math.atan2(-a, -b))
-    else:
-        angle = math.degrees(math.atan2(a, b))
-    return (dist, angle)
-
-
 def goodAngle(ang):
     ang %= 360
     if ang > 180:
         ang = ang - 360
     return ang
-
-
-def get_object_data(blob, color):
-    circle = blob.enclosing_circle()
-    dist = ((circle[0] - SCREEN_CENTER[0]) ** 2 +
-            (circle[1] - SCREEN_CENTER[1]) ** 2) ** 0.5
-    cang = math.degrees(math.atan2(circle[0] - SCREEN_CENTER[0],
-                                   SCREEN_CENTER[1] - circle[1]))
-    cang = goodAngle(cang)
-    delta = math.degrees(math.atan2(circle[2], dist))
-    lang = goodAngle(cang - delta)
-    rang = goodAngle(cang + delta)
-    width = 2 * delta
-    closAngle = cang
-    corners = blob.corners()
-    height = max(((corners[0][0] - corners[2][0]) ** 2 +
-                  (corners[0][1] - corners[2][1]) ** 2) ** 0.5,
-                 ((corners[1][0] - corners[3][0]) ** 2 +
-                  (corners[1][1] - corners[3][1]) ** 2) ** 0.5)
-    for i in range(len(corners)):
-        dist2, ang2 = dist_to_edge(SCREEN_CENTER,
-                                   ((corners[i][0], 2 * SCREEN_CENTER[1] - corners[i][1]),
-                                    (corners[(i + 1) % 4][0],
-                                     2 * SCREEN_CENTER[1] - corners[(i + 1) % 4][1])))
-        if dist2 < dist:
-            dist = dist2
-            closAngle = ang2
-
-    obj_data = [lang, cang, rang, color, closAngle, dist, width, height, blob.area()]
-
-    return obj_data
 
 
 def int_for_cpp(x):
@@ -115,6 +55,8 @@ except Exception:
 # green_thr = (16, 85, -128, -23, -42, 54)
 yellow_thr = thresholds[0] #(50, 75, 0, 20, 30, 60)
 blue_thr = thresholds[1] #(40, 55, -10, 15, -20, 5)
+obst_thr = thresholds[2]
+white_thr = thresholds[3]
 
 SCREEN_CENTER = (160, 120)
 
@@ -130,6 +72,11 @@ sensor.set_framesize(sensor.QVGA)
 sensor.skip_frames(time = 2000)
 
 import connect_to_kostyli
+usb_vbus = Pin("USB_VBUS", Pin.IN, Pin.PULL_DOWN)
+if(usb_vbus.value()):
+    #pyb.LED(2).on()
+    connect_to_kostyli.connect_to_comp()
+    pass
 
 #pyb.LED(3).on()
 
@@ -141,68 +88,67 @@ uart = UART(3, 115200)
 
 frame = 0
 
+data = bytearray(38)
+
 while True:
     clock.tick()
     img = sensor.snapshot()
+#    img = img.median(2)
 
 #    if frame % 200 == 0:
 #        img.save(f"snapshot{time.time()}.bmp")
     frame += 1
 
-    img.draw_circle(*SCREEN_CENTER, 10, color=(255, 0, 0), fill=True)
+#    img.draw_circle(*SCREEN_CENTER, 10, color=(255, 0, 0), fill=True)
 
     sectors = []
 
     blue = [360, 360, 360, (0, 0, 0), 360, 1000, 0, 0, 0]
     yellow = [360, 360, 360, (0, 0, 0), 360, 1000, 0, 0, 0]
 
-    send_blue = [360, 360, 360, 360, 1000, 0, 0]
-    send_yellow = [360, 360, 360, 360, 1000, 0, 0]
+    send_blue = [-1, -1, -1, -1, -1, -1, -1, -1]
+    send_yellow = [-1, -1, -1, -1, -1, -1, -1, -1]
+
+    blue_area = 0
+    yellow_area = 0
+
+    obst_angle = 360
+    obst_dist = 1000
 
     for blob in img.find_blobs([blue_thr], pixels_threshold=50, area_threshold=50):
         if blob.roundness() > 0:
-            obj_data = get_object_data(blob, (0, 0, 255))
+            print(blob.corners())
 
-            if obj_data[8] > blue[8] and obj_data[5] < 150:
-                blue = obj_data
-                send_blue = [blue[0], blue[1], blue[2], blue[4],
-                             blue[5], blue[6], blue[7]]
+            if blob.area() > blue_area:
+                img.draw_edges(blob.corners(), color=(0, 0, 255))
+                send_blue = (2 * SCREEN_CENTER[0] - blob.corners()[0][0], 2 * SCREEN_CENTER[1] - blob.corners()[0][1],
+                             2 * SCREEN_CENTER[0] - blob.corners()[1][0], 2 * SCREEN_CENTER[1] - blob.corners()[1][1],
+                             2 * SCREEN_CENTER[0] - blob.corners()[2][0], 2 * SCREEN_CENTER[1] - blob.corners()[2][1],
+                             2 * SCREEN_CENTER[0] - blob.corners()[3][0], 2 * SCREEN_CENTER[1] - blob.corners()[3][1])
 
-            if obj_data[5] > 150:
-                img.draw_edges(blob.corners(), color=(255, 0, 0))
-            else:
-                img.draw_edges(blob.corners())
 
-    for blob in img.find_blobs([yellow_thr], pixels_threshold=50, area_threshold=50):
+    for blob in img.find_blobs([yellow_thr], pixels_threshold=50, area_threshold=50, merge=True):
         if blob.roundness() > 0:
-            obj_data = get_object_data(blob, (255, 255, 0))
+            print(blob.corners())
 
-            if obj_data[8] > yellow[8] and obj_data[5] < 160: # and obj_data[5] > 35:
-                yellow = obj_data
-                send_yellow = [yellow[0], yellow[1], yellow[2], yellow[4],
-                               yellow[5], yellow[6], yellow[7]]
+            if blob.area() > yellow_area:
+                img.draw_edges(blob.corners(), color=(255, 255, 0))
+                send_yellow = (2 * SCREEN_CENTER[0] - blob.corners()[0][0], 2 * SCREEN_CENTER[1] - blob.corners()[0][1],
+                               2 * SCREEN_CENTER[0] - blob.corners()[1][0], 2 * SCREEN_CENTER[1] - blob.corners()[1][1],
+                               2 * SCREEN_CENTER[0] - blob.corners()[2][0], 2 * SCREEN_CENTER[1] - blob.corners()[2][1],
+                               2 * SCREEN_CENTER[0] - blob.corners()[3][0], 2 * SCREEN_CENTER[1] - blob.corners()[3][1])
 
-            if obj_data[5] > 160:
-                img.draw_edges(blob.corners(), color=(255, 0, 0))
-            else:
-                img.draw_edges(blob.corners())
+    for blob in img.find_blobs([obst_thr], pixels_threshold=100, area_threshold=100):
+        if blob.roundness() > 0:
+            img.draw_edges(blob.corners(), color=(0, 0, 0))
 
-    sectors = [blue, yellow]
-    #print(sectors)
-    #draw_line_from_angle(img, SCREEN_CENTER, ang, (255, 0, 0))
-    for s in sectors:
-        draw_line_from_angle(img, SCREEN_CENTER, s[0], s[3])
-        draw_line_from_angle(img, SCREEN_CENTER, s[2], s[3])
-        draw_line_from_angle(img, SCREEN_CENTER, s[1], (255, 0, 0))
-        draw_line_from_angle(img, SCREEN_CENTER, s[4], (0, 0, 0), s[5])
-    ang += 5
-
-    print('yellow:', send_yellow[4])
+    if obst_angle != 360:
+        draw_line_from_angle(img, SCREEN_CENTER, obst_angle, (200, 100, 60), obst_dist)
 
     send_yellow = list(map(int_for_cpp, send_yellow))
     send_blue = list(map(int_for_cpp, send_blue))
 
-    data = bytearray(30)
+    print(send_yellow)
 
     data[0] = 255
     data[1] = 255
@@ -220,30 +166,32 @@ while True:
     data[13] = send_yellow[5] & 255
     data[14] = (send_yellow[6] >> 8) & 255
     data[15] = send_yellow[6] & 255
+    data[16] = (send_yellow[7] >> 8) & 255
+    data[17] = send_yellow[7] & 255
 
-    data[16] = (send_blue[0] >> 8) & 255
-    data[17] = send_blue[0] & 255
-    data[18] = (send_blue[1] >> 8) & 255
-    data[19] = send_blue[1] & 255
-    data[20] = (send_blue[2] >> 8) & 255
-    data[21] = send_blue[2] & 255
-    data[22] = (send_blue[3] >> 8) & 255
-    data[23] = send_blue[3] & 255
-    data[24] = (send_blue[4] >> 8) & 255
-    data[25] = send_blue[4] & 255
-    data[26] = (send_blue[5] >> 8) & 255
-    data[27] = send_blue[5] & 255
-    data[28] = (send_blue[6] >> 8) & 255
-    data[29] = send_blue[6] & 255
+    data[18] = (send_blue[0] >> 8) & 255
+    data[19] = send_blue[0] & 255
+    data[20] = (send_blue[1] >> 8) & 255
+    data[21] = send_blue[1] & 255
+    data[22] = (send_blue[2] >> 8) & 255
+    data[23] = send_blue[2] & 255
+    data[24] = (send_blue[3] >> 8) & 255
+    data[25] = send_blue[3] & 255
+    data[26] = (send_blue[4] >> 8) & 255
+    data[27] = send_blue[4] & 255
+    data[28] = (send_blue[5] >> 8) & 255
+    data[29] = send_blue[5] & 255
+    data[30] = (send_blue[6] >> 8) & 255
+    data[31] = send_blue[6] & 255
+    data[32] = (send_blue[7] >> 8) & 255
+    data[33] = send_blue[7] & 255
 
-    print(data)
-    #data = bytes(data)
+    obst_angle = int_for_cpp(obst_angle)
+    obst_dist = int_for_cpp(obst_dist)
+    data[34] = (obst_angle >> 8) & 255
+    data[35] = obst_angle & 255
+    data[36] = (obst_dist >> 8) & 255
+    data[37] = obst_dist & 255
     uart.write(data)
-
-    # data = ' '.join(map(str, map(int, send_yellow + send_blue))) + ' '
-    # print(data)
-    # print('dist =', send_yellow[4])
-
-    # uart.write(data)
 
     print(clock.fps())
