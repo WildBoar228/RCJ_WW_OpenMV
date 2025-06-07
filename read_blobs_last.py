@@ -117,9 +117,8 @@ while True:
 
     for blob in img.find_blobs([blue_thr], pixels_threshold=50, area_threshold=50):
         if blob.roundness() > 0:
-            print(blob.corners())
-
             if blob.area() > blue_area:
+                blue_area = blob.area()
                 img.draw_edges(blob.corners(), color=(0, 0, 255))
                 send_blue = (2 * SCREEN_CENTER[0] - blob.corners()[0][0], 2 * SCREEN_CENTER[1] - blob.corners()[0][1],
                              2 * SCREEN_CENTER[0] - blob.corners()[1][0], 2 * SCREEN_CENTER[1] - blob.corners()[1][1],
@@ -129,9 +128,10 @@ while True:
 
     for blob in img.find_blobs([yellow_thr], pixels_threshold=50, area_threshold=50, merge=True):
         if blob.roundness() > 0:
-            print(blob.corners())
+            print(blob.area())
 
             if blob.area() > yellow_area:
+                yellow_area = blob.area()
                 img.draw_edges(blob.corners(), color=(255, 255, 0))
                 send_yellow = (2 * SCREEN_CENTER[0] - blob.corners()[0][0], 2 * SCREEN_CENTER[1] - blob.corners()[0][1],
                                2 * SCREEN_CENTER[0] - blob.corners()[1][0], 2 * SCREEN_CENTER[1] - blob.corners()[1][1],
@@ -141,6 +141,12 @@ while True:
     for blob in img.find_blobs([obst_thr], pixels_threshold=100, area_threshold=100):
         if blob.roundness() > 0:
             img.draw_edges(blob.corners(), color=(0, 0, 0))
+
+    img.draw_edges(((2 * SCREEN_CENTER[0] - send_yellow[0], 2 * SCREEN_CENTER[1] - send_yellow[1]),
+                    (2 * SCREEN_CENTER[0] - send_yellow[2], 2 * SCREEN_CENTER[1] - send_yellow[3]),
+                    (2 * SCREEN_CENTER[0] - send_yellow[4], 2 * SCREEN_CENTER[1] - send_yellow[5]),
+                    (2 * SCREEN_CENTER[0] - send_yellow[6], 2 * SCREEN_CENTER[1] - send_yellow[7]))
+                    , color=(255, 0, 0))
 
     if obst_angle != 360:
         draw_line_from_angle(img, SCREEN_CENTER, obst_angle, (200, 100, 60), obst_dist)
