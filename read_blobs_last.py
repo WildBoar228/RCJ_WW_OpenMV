@@ -75,7 +75,7 @@ import connect_to_kostyli
 usb_vbus = Pin("USB_VBUS", Pin.IN, Pin.PULL_DOWN)
 if(usb_vbus.value()):
     #pyb.LED(2).on()
-    connect_to_kostyli.connect_to_comp()
+    # connect_to_kostyli.connect_to_comp()
     pass
 
 #pyb.LED(3).on()
@@ -89,6 +89,8 @@ uart = UART(3, 115200)
 frame = 0
 
 data = bytearray(38)
+
+
 
 while True:
     clock.tick()
@@ -115,7 +117,7 @@ while True:
     obst_angle = 360
     obst_dist = 1000
 
-    for blob in img.find_blobs([blue_thr], pixels_threshold=50, area_threshold=50):
+    for blob in img.find_blobs([blue_thr], pixels_threshold=25, area_threshold=25):
         if blob.roundness() > 0:
             if blob.area() > blue_area:
                 blue_area = blob.area()
@@ -126,11 +128,14 @@ while True:
                              2 * SCREEN_CENTER[0] - blob.corners()[3][0], 2 * SCREEN_CENTER[1] - blob.corners()[3][1])
 
 
-    for blob in img.find_blobs([yellow_thr], pixels_threshold=50, area_threshold=50, merge=True):
+    for blob in img.find_blobs([yellow_thr], pixels_threshold=25, area_threshold=25, merge=True):
         if blob.roundness() > 0:
-            print(blob.area())
+            # print(blob.area())
 
-            if blob.area() > yellow_area:
+            dist = ((SCREEN_CENTER[0] - blob.x()) ** 2 + (SCREEN_CENTER[1] - blob.y()) ** 2) ** 0.5
+
+            if dist < 100 and blob.area() > yellow_area:
+                print('dist', dist)
                 yellow_area = blob.area()
                 img.draw_edges(blob.corners(), color=(255, 255, 0))
                 send_yellow = (2 * SCREEN_CENTER[0] - blob.corners()[0][0], 2 * SCREEN_CENTER[1] - blob.corners()[0][1],
